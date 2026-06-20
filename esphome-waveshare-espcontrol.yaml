@@ -1,0 +1,43 @@
+# =============================================================================
+# EspControl para Waveshare ESP32-P4-WIFI6-Touch-LCD-7B
+# =============================================================================
+# IMPORTANTE - pasos antes de usar este archivo:
+#
+# 1. Haz un FORK de https://github.com/jtenniswood/espcontrol en tu cuenta
+#    de GitHub (boton "Fork" arriba a la derecha).
+#
+# 2. Dentro de tu fork, crea esta carpeta nueva:
+#       devices/waveshare-esp32-p4-wifi6-7b/
+#       devices/waveshare-esp32-p4-wifi6-7b/device/
+#
+# 3. Sube estos 6 archivos que te he generado a esas carpetas:
+#       devices/waveshare-esp32-p4-wifi6-7b/packages.yaml
+#       devices/waveshare-esp32-p4-wifi6-7b/device/device.yaml
+#       devices/waveshare-esp32-p4-wifi6-7b/device/network_coprocessor.yaml
+#       devices/waveshare-esp32-p4-wifi6-7b/device/lvgl.yaml
+#       devices/waveshare-esp32-p4-wifi6-7b/device/sensors.yaml
+#       devices/waveshare-esp32-p4-wifi6-7b/device/fonts.yaml
+#
+# 4. Cambia la URL de abajo (TU_USUARIO) por tu usuario real de GitHub.
+#
+# 5. En el dashboard de ESPHome, añade tus credenciales WiFi en secrets.yaml:
+#       wifi_ssid: "TuRedWifi"
+#       wifi_password: "TuContraseña"
+#
+# 6. Flashea por USB la primera vez (cable a la placa).
+# =============================================================================
+
+substitutions:
+  name: "waveshare-panel"
+  friendly_name: "Waveshare Panel"
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+packages:
+  setup:
+    url: https://github.com/TU_USUARIO/espcontrol/
+    ref: main
+    file: devices/waveshare-esp32-p4-wifi6-7b/packages.yaml
+    refresh: 1sec
