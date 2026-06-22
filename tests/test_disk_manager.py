@@ -248,21 +248,29 @@ class DiskManagerTests(unittest.TestCase):
 
         self.assertTrue(plan.fstab_line.endswith(" 0 2"))
 
-    def test_ntfs_and_exfat_fstab_lines_use_pass_0(self) -> None:
+    def test_ntfs_fstab_line_uses_pass_0(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             fstab_path = Path(temp_dir) / "fstab"
             fstab_path.write_text("", encoding="utf-8")
             manager = DiskManager(fstab_path=fstab_path)
 
-            ntfs_plan = manager.create_mount_plan(
+            plan = manager.create_mount_plan(
                 self._disk_partition(filesystem="ntfs", uuid="ntfs-plan-uuid")
             )
-            exfat_plan = manager.create_mount_plan(
+
+        self.assertTrue(plan.fstab_line.endswith(" 0 0"))
+
+    def test_exfat_fstab_line_uses_pass_0(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            fstab_path = Path(temp_dir) / "fstab"
+            fstab_path.write_text("", encoding="utf-8")
+            manager = DiskManager(fstab_path=fstab_path)
+
+            plan = manager.create_mount_plan(
                 self._disk_partition(filesystem="exfat", uuid="exfat-plan-uuid")
             )
 
-        self.assertTrue(ntfs_plan.fstab_line.endswith(" 0 0"))
-        self.assertTrue(exfat_plan.fstab_line.endswith(" 0 0"))
+        self.assertTrue(plan.fstab_line.endswith(" 0 0"))
 
     def test_existing_uuid_plan_does_not_assume_games_mountpoint(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

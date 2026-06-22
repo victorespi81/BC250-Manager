@@ -315,11 +315,13 @@ class DiskManager:
         return safe_label or partition.uuid
 
     def _fstab_line(self, partition: DiskPartition, target_mountpoint: str) -> str:
-        pass_number = FSCK_PASS_BY_FILESYSTEM[partition.filesystem.lower()]
         return (
             f"UUID={partition.uuid} {target_mountpoint} {partition.filesystem.lower()} "
-            f"{MOUNT_OPTIONS} 0 {pass_number}"
+            f"{MOUNT_OPTIONS} 0 {self._fsck_pass_number(partition.filesystem)}"
         )
+
+    def _fsck_pass_number(self, filesystem: str) -> str:
+        return FSCK_PASS_BY_FILESYSTEM[filesystem.lower()]
 
     def _fstab_has_uuid(self, uuid: str) -> bool:
         try:
