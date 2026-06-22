@@ -306,14 +306,15 @@ class DiskManager:
         safe_label = re.sub(r"[^A-Za-z0-9._-]+", "_", source).strip("._-")
         return safe_label or partition.uuid
 
-    def _fstab_line(self, partition: DiskPartition, target_mountpoint: str) -> str:
-        return (
-            f"UUID={partition.uuid} {target_mountpoint} {partition.filesystem.lower()} "
-            f"{MOUNT_OPTIONS} 0 {self._fstab_pass_value(partition.filesystem)}"
-        )
-
     def _fstab_pass_value(self, filesystem: str) -> str:
         return "0" if filesystem.lower() in {"ntfs", "ntfs3", "exfat"} else "2"
+
+    def _fstab_line(self, partition: DiskPartition, target_mountpoint: str) -> str:
+        pass_value = self._fstab_pass_value(partition.filesystem)
+        return (
+            f"UUID={partition.uuid} {target_mountpoint} {partition.filesystem.lower()} "
+            f"{MOUNT_OPTIONS} 0 {pass_value}"
+        )
 
     def _fstab_has_uuid(self, uuid: str) -> bool:
         try:
