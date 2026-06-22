@@ -66,11 +66,68 @@ class DiskManagerTests(unittest.TestCase):
         with self.assertRaises(DiskDetectionError):
             DiskManager().parse_lsblk_output("not-json")
 
+    def test_filters_system_subvolumes_and_shows_games_disk(self) -> None:
+        payload = {
+            "blockdevices": [
+                {
+                    "name": "nvme0n1",
+                    "type": "disk",
+                    "children": [
+                        self._partition(
+                            "nvme0n1p1",
+                            "ext4",
+                            "/boot",
+                            label="BOOT",
+                            uuid="boot-uuid",
+                        ),
+                        self._partition(
+                            "nvme0n1p2",
+                            "btrfs",
+                            ["/home", "/var", "/root", "/srv", "/run"],
+                            label="CACHYOS",
+                            uuid="system-uuid",
+                        ),
+                    ],
+                },
+                {
+                    "name": "sda",
+                    "type": "disk",
+                    "children": [
+                        self._partition("sda1", "iso9660", "/run/media/cachyos/ISO"),
+                        self._partition("sda2", "vfat", "/run/media/cachyos/EFI", label="EFI"),
+                    ],
+                },
+                {
+                    "name": "sdb",
+                    "type": "disk",
+                    "children": [
+                        self._partition(
+                            "sdb1",
+                            "ext4",
+                            "/games/HDD_Juegos",
+                            label="HDD_Juegos",
+                            uuid="games-uuid",
+                        )
+                    ],
+                },
+            ]
+        }
+
+        partitions = DiskManager().parse_lsblk_output(json.dumps(payload))
+
+        self.assertEqual(1, len(partitions))
+        partition = partitions[0]
+        self.assertEqual("/dev/sdb1", partition.device)
+        self.assertEqual("ext4", partition.filesystem)
+        self.assertEqual("HDD_Juegos", partition.label)
+        self.assertEqual("games-uuid", partition.uuid)
+        self.assertEqual("/games/HDD_Juegos", partition.mountpoint)
+
     def _partition(
         self,
         name: str,
         filesystem: str,
-        mountpoint: str,
+        mountpoint: str | list[str],
         *,
         label: str = "",
         uuid: str = "",
@@ -82,9 +139,15 @@ class DiskManagerTests(unittest.TestCase):
             "fstype": filesystem,
             "label": label,
             "uuid": uuid,
-            "mountpoints": [mountpoint] if mountpoint else [],
+            "mountpoints": self._mountpoints(mountpoint),
             "type": "part",
         }
+
+    def _mountpoints(self, mountpoint: str | list[str]) -> list[str]:
+        if isinstance(mountpoint, list):
+            return mountpoint
+
+        return [mountpoint] if mountpoint else []
 
 
 if __name__ == "__main__":

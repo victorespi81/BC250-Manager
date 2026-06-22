@@ -8,8 +8,9 @@ from typing import Any
 
 
 SUPPORTED_FILESYSTEMS = frozenset({"ext4", "btrfs", "xfs", "ntfs", "ntfs3", "exfat"})
-IGNORED_FILESYSTEMS = frozenset({"swap", "vfat"})
-IGNORED_MOUNTPOINTS = frozenset({"/", "/boot"})
+IGNORED_FILESYSTEMS = frozenset({"iso9660", "swap", "vfat"})
+IGNORED_MOUNTPOINTS = frozenset({"/", "/boot", "/home", "/root", "/run", "/srv", "/var"})
+IGNORED_MOUNTPOINT_PREFIXES = ("/boot/", "/home/", "/root/", "/run/", "/srv/", "/var/")
 
 
 @dataclass(frozen=True)
@@ -97,7 +98,7 @@ class DiskManager:
         if label == "efi":
             return False
 
-        return all(mountpoint not in IGNORED_MOUNTPOINTS for mountpoint in mountpoints)
+        return not any(self._is_system_mountpoint(mountpoint) for mountpoint in mountpoints)
 
     def _partition_from_node(self, node: dict[str, Any]) -> DiskPartition:
         mountpoint = self._display_mountpoint(node)
@@ -127,13 +128,22 @@ class DiskManager:
         raw_mountpoints = node.get("mountpoints")
 
         if isinstance(raw_mountpoints, list):
-            return [mountpoint for mountpoint in raw_mountpoints if isinstance(mountpoint, str)]
+            return [
+                mountpoint.rstrip("/") or "/"
+                for mountpoint in raw_mountpoints
+                if isinstance(mountpoint, str) and mountpoint
+            ]
 
         raw_mountpoint = node.get("mountpoint")
         if isinstance(raw_mountpoint, str):
-            return [raw_mountpoint]
+            return [raw_mountpoint.rstrip("/") or "/"] if raw_mountpoint else []
 
         return []
+
+    def _is_system_mountpoint(self, mountpoint: str) -> bool:
+        return mountpoint in IGNORED_MOUNTPOINTS or mountpoint.startswith(
+            IGNORED_MOUNTPOINT_PREFIXES
+        )
 
     def _has_steamapps(self, mountpoint: str) -> bool:
         if not mountpoint:
