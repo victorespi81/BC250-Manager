@@ -22,6 +22,14 @@ GAME_MOUNTPOINT_PREFIXES = tuple(f"{mountpoint}/" for mountpoint in sorted(GAME_
 FSTAB_PATH = Path("/etc/fstab")
 LOG_PATH = Path.home() / ".local" / "state" / "bc250-manager" / "bc250-manager.log"
 MOUNT_OPTIONS = "defaults,nofail,x-systemd.device-timeout=5"
+FSCK_PASS_BY_FILESYSTEM = {
+    "btrfs": "2",
+    "ext4": "2",
+    "xfs": "2",
+    "exfat": "0",
+    "ntfs": "0",
+    "ntfs3": "0",
+}
 
 
 @dataclass(frozen=True)
@@ -74,15 +82,17 @@ class DiskManager:
     def create_mount_plan(self, partition: DiskPartition) -> MountPlan:
         self._validate_mount_candidate(partition)
 
-        target_mountpoint = self._target_mountpoint(partition)
-        fstab_line = self._fstab_line(partition, target_mountpoint)
+        fstab_entry_exists = self._fstab_has_uuid(partition.uuid)
+        already_mounted = self._is_game_partition([partition.mountpoint])
+        target_mountpoint = "" if fstab_entry_exists else self._target_mountpoint(partition)
+        fstab_line = "" if fstab_entry_exists else self._fstab_line(partition, target_mountpoint)
 
         return MountPlan(
             partition=partition,
             target_mountpoint=target_mountpoint,
             fstab_line=fstab_line,
-            fstab_entry_exists=self._fstab_has_uuid(partition.uuid),
-            already_mounted=self._is_game_partition([partition.mountpoint]),
+            fstab_entry_exists=fstab_entry_exists,
+            already_mounted=already_mounted,
         )
 
     def mount_partition(self, partition: DiskPartition) -> MountResult:
@@ -94,18 +104,20 @@ class DiskManager:
             self._logger.info("mount success: %s", message)
             return MountResult(success=True, message=message, plan=plan)
 
+        if plan.fstab_entry_exists:
+            message = f"UUID {partition.uuid} already exists in {self._fstab_path}; fstab was not modified."
+            self._logger.info("fstab UUID already exists: %s", partition.uuid)
+            return MountResult(success=False, message=message, plan=plan)
+
         backup_path = self._backup_path()
 
         try:
             self._run_privileged(["mkdir", "-p", plan.target_mountpoint])
 
-            if not plan.fstab_entry_exists:
-                self._run_privileged(["cp", str(self._fstab_path), backup_path])
-                self._logger.info("fstab backup path: %s", backup_path)
-                self._append_fstab_line(plan.fstab_line)
-                self._logger.info("fstab line added: %s", plan.fstab_line)
-            else:
-                self._logger.info("fstab UUID already exists: %s", partition.uuid)
+            self._run_privileged(["cp", str(self._fstab_path), backup_path])
+            self._logger.info("fstab backup path: %s", backup_path)
+            self._append_fstab_line(plan.fstab_line)
+            self._logger.info("fstab line added: %s", plan.fstab_line)
 
             self._run_privileged(["systemctl", "daemon-reload"])
             self._run_privileged(["mount", "-a"])
@@ -303,9 +315,10 @@ class DiskManager:
         return safe_label or partition.uuid
 
     def _fstab_line(self, partition: DiskPartition, target_mountpoint: str) -> str:
+        pass_number = FSCK_PASS_BY_FILESYSTEM[partition.filesystem.lower()]
         return (
             f"UUID={partition.uuid} {target_mountpoint} {partition.filesystem.lower()} "
-            f"{MOUNT_OPTIONS} 0 2"
+            f"{MOUNT_OPTIONS} 0 {pass_number}"
         )
 
     def _fstab_has_uuid(self, uuid: str) -> bool:

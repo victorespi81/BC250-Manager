@@ -236,6 +236,49 @@ class DiskManagerTests(unittest.TestCase):
         )
         self.assertFalse(plan.fstab_entry_exists)
 
+    def test_ext4_fstab_line_uses_pass_2(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            fstab_path = Path(temp_dir) / "fstab"
+            fstab_path.write_text("", encoding="utf-8")
+            manager = DiskManager(fstab_path=fstab_path)
+
+            plan = manager.create_mount_plan(
+                self._disk_partition(filesystem="ext4", uuid="ext4-uuid")
+            )
+
+        self.assertTrue(plan.fstab_line.endswith(" 0 2"))
+
+    def test_ntfs_and_exfat_fstab_lines_use_pass_0(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            fstab_path = Path(temp_dir) / "fstab"
+            fstab_path.write_text("", encoding="utf-8")
+            manager = DiskManager(fstab_path=fstab_path)
+
+            ntfs_plan = manager.create_mount_plan(
+                self._disk_partition(filesystem="ntfs", uuid="ntfs-plan-uuid")
+            )
+            exfat_plan = manager.create_mount_plan(
+                self._disk_partition(filesystem="exfat", uuid="exfat-plan-uuid")
+            )
+
+        self.assertTrue(ntfs_plan.fstab_line.endswith(" 0 0"))
+        self.assertTrue(exfat_plan.fstab_line.endswith(" 0 0"))
+
+    def test_existing_uuid_plan_does_not_assume_games_mountpoint(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            fstab_path = Path(temp_dir) / "fstab"
+            fstab_path.write_text(
+                "UUID=existing /mnt/existing ext4 defaults 0 2\n",
+                encoding="utf-8",
+            )
+            manager = DiskManager(fstab_path=fstab_path)
+
+            plan = manager.create_mount_plan(self._disk_partition(uuid="existing"))
+
+        self.assertTrue(plan.fstab_entry_exists)
+        self.assertEqual("", plan.target_mountpoint)
+        self.assertEqual("", plan.fstab_line)
+
     def test_mount_partition_uses_pkexec_backup_and_mount_a(self) -> None:
         commands: list[list[str]] = []
 
@@ -271,10 +314,12 @@ class DiskManagerTests(unittest.TestCase):
 
             result = manager.mount_partition(self._disk_partition(uuid="existing"))
 
-        self.assertTrue(result.success)
+        self.assertFalse(result.success)
+        self.assertIn("already exists", result.message)
+        self.assertEqual("", result.plan.target_mountpoint)
         self.assertFalse(any(command[:2] == ["pkexec", "cp"] for command in commands))
         self.assertFalse(any(command[:3] == ["pkexec", "sh", "-c"] for command in commands))
-        self.assertIn(["pkexec", "mount", "-a"], commands)
+        self.assertEqual([], commands)
 
     def test_mount_failure_restores_backup_after_fstab_edit(self) -> None:
         commands: list[list[str]] = []

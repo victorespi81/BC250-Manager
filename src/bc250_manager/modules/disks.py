@@ -208,6 +208,14 @@ class DisksPage(ModulePage):
             )
             return
 
+        if plan.fstab_entry_exists:
+            QMessageBox.information(
+                self,
+                "Already in fstab",
+                f"UUID {partition.uuid} already exists in /etc/fstab. No changes were made.",
+            )
+            return
+
         if not self._confirm_mount(plan):
             return
 
