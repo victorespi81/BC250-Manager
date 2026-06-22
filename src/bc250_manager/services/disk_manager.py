@@ -317,10 +317,10 @@ class DiskManager:
     def _fstab_line(self, partition: DiskPartition, target_mountpoint: str) -> str:
         return (
             f"UUID={partition.uuid} {target_mountpoint} {partition.filesystem.lower()} "
-            f"{MOUNT_OPTIONS} 0 {self._fsck_pass_number(partition.filesystem)}"
+            f"{MOUNT_OPTIONS} 0 {self._fstab_pass_value(partition.filesystem)}"
         )
 
-    def _fsck_pass_number(self, filesystem: str) -> str:
+    def _fstab_pass_value(self, filesystem: str) -> str:
         return FSCK_PASS_BY_FILESYSTEM[filesystem.lower()]
 
     def _fstab_has_uuid(self, uuid: str) -> bool:

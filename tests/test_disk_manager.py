@@ -246,7 +246,11 @@ class DiskManagerTests(unittest.TestCase):
                 self._disk_partition(filesystem="ext4", uuid="ext4-uuid")
             )
 
-        self.assertTrue(plan.fstab_line.endswith(" 0 2"))
+        self.assertEqual(
+            "UUID=ext4-uuid /games/Games ext4 "
+            "defaults,nofail,x-systemd.device-timeout=5 0 2",
+            plan.fstab_line,
+        )
 
     def test_ntfs_fstab_line_uses_pass_0(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -258,7 +262,11 @@ class DiskManagerTests(unittest.TestCase):
                 self._disk_partition(filesystem="ntfs", uuid="ntfs-plan-uuid")
             )
 
-        self.assertTrue(plan.fstab_line.endswith(" 0 0"))
+        self.assertEqual(
+            "UUID=ntfs-plan-uuid /games/Games ntfs "
+            "defaults,nofail,x-systemd.device-timeout=5 0 0",
+            plan.fstab_line,
+        )
 
     def test_exfat_fstab_line_uses_pass_0(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -270,7 +278,11 @@ class DiskManagerTests(unittest.TestCase):
                 self._disk_partition(filesystem="exfat", uuid="exfat-plan-uuid")
             )
 
-        self.assertTrue(plan.fstab_line.endswith(" 0 0"))
+        self.assertEqual(
+            "UUID=exfat-plan-uuid /games/Games exfat "
+            "defaults,nofail,x-systemd.device-timeout=5 0 0",
+            plan.fstab_line,
+        )
 
     def test_existing_uuid_plan_does_not_assume_games_mountpoint(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
