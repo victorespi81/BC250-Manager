@@ -15,6 +15,7 @@ class DiskManagerTests(unittest.TestCase):
             "blockdevices": [
                 {
                     "name": "sda",
+                    "path": "/dev/sda",
                     "type": "disk",
                     "children": [
                         self._partition("sda1", "ext4", "/"),
@@ -22,7 +23,15 @@ class DiskManagerTests(unittest.TestCase):
                         self._partition("sda3", "vfat", "/boot/efi", label="EFI"),
                         self._partition("sda4", "swap", ""),
                         self._partition("sda5", "crypto_LUKS", ""),
-                        self._partition("sda6", "btrfs", "/mnt/games"),
+                        self._partition("sda6", "ext4", "/mnt/no-uuid"),
+                    ],
+                },
+                {
+                    "name": "sdb",
+                    "path": "/dev/sdb",
+                    "type": "disk",
+                    "children": [
+                        self._partition("sdb1", "btrfs", "/mnt/games", uuid="games-uuid"),
                     ],
                 }
             ]
@@ -31,7 +40,7 @@ class DiskManagerTests(unittest.TestCase):
         partitions = DiskManager().parse_lsblk_output(json.dumps(payload))
 
         self.assertEqual(1, len(partitions))
-        self.assertEqual("/dev/sda6", partitions[0].device)
+        self.assertEqual("/dev/sdb1", partitions[0].device)
         self.assertEqual("btrfs", partitions[0].filesystem)
 
     def test_detects_steamapps_for_supported_mountpoint(self) -> None:
@@ -66,11 +75,153 @@ class DiskManagerTests(unittest.TestCase):
         with self.assertRaises(DiskDetectionError):
             DiskManager().parse_lsblk_output("not-json")
 
+    def test_system_btrfs_with_multiple_mountpoints_is_hidden(self) -> None:
+        payload = {
+            "blockdevices": [
+                {
+                    "name": "nvme0n1",
+                    "path": "/dev/nvme0n1",
+                    "type": "disk",
+                    "children": [
+                        self._partition(
+                            "nvme0n1p2",
+                            "btrfs",
+                            ["/", "/home", "/var", "/root", "/srv", "/run"],
+                            label="CACHYOS",
+                            uuid="system-uuid",
+                        )
+                    ],
+                }
+            ]
+        }
+
+        partitions = DiskManager().parse_lsblk_output(json.dumps(payload))
+
+        self.assertEqual([], partitions)
+
+    def test_efi_vfat_is_hidden(self) -> None:
+        payload = {
+            "blockdevices": [
+                {
+                    "name": "sda",
+                    "type": "disk",
+                    "children": [
+                        self._partition("sda1", "vfat", "/efi", label="EFI", uuid="efi-uuid")
+                    ],
+                }
+            ]
+        }
+
+        partitions = DiskManager().parse_lsblk_output(json.dumps(payload))
+
+        self.assertEqual([], partitions)
+
+    def test_iso9660_installer_media_is_hidden(self) -> None:
+        payload = {
+            "blockdevices": [
+                {
+                    "name": "sda",
+                    "type": "disk",
+                    "children": [
+                        self._partition(
+                            "sda1",
+                            "iso9660",
+                            "/run/media/cachyos/ISO",
+                            uuid="iso-uuid",
+                        )
+                    ],
+                }
+            ]
+        }
+
+        partitions = DiskManager().parse_lsblk_output(json.dumps(payload))
+
+        self.assertEqual([], partitions)
+
+    def test_ext4_mounted_at_games_is_shown(self) -> None:
+        payload = {
+            "blockdevices": [
+                {
+                    "name": "nvme0n1",
+                    "path": "/dev/nvme0n1",
+                    "type": "disk",
+                    "children": [
+                        self._partition(
+                            "nvme0n1p2",
+                            "btrfs",
+                            ["/", "/home", "/var"],
+                            label="CACHYOS",
+                            uuid="system-uuid",
+                        ),
+                    ],
+                },
+                {
+                    "name": "sdb",
+                    "path": "/dev/sdb",
+                    "type": "disk",
+                    "children": [
+                        self._partition(
+                            "sdb1",
+                            "ext4",
+                            "/games/HDD_Juegos",
+                            label="Games",
+                            uuid="games-uuid",
+                        )
+                    ],
+                },
+            ]
+        }
+
+        partitions = DiskManager().parse_lsblk_output(json.dumps(payload))
+
+        self.assertEqual(1, len(partitions))
+        partition = partitions[0]
+        self.assertEqual("/dev/sdb1", partition.device)
+        self.assertEqual("/games/HDD_Juegos", partition.mountpoint)
+
+    def test_ext4_unmounted_data_disk_is_shown(self) -> None:
+        payload = {
+            "blockdevices": [
+                {
+                    "name": "sdc",
+                    "type": "disk",
+                    "children": [
+                        self._partition("sdc1", "ext4", "", label="Data", uuid="data-uuid")
+                    ],
+                }
+            ]
+        }
+
+        partitions = DiskManager().parse_lsblk_output(json.dumps(payload))
+
+        self.assertEqual(1, len(partitions))
+        self.assertEqual("/dev/sdc1", partitions[0].device)
+        self.assertEqual("", partitions[0].mountpoint)
+
+    def test_ntfs_unmounted_data_disk_is_shown(self) -> None:
+        payload = {
+            "blockdevices": [
+                {
+                    "name": "sdd",
+                    "type": "disk",
+                    "children": [
+                        self._partition("sdd1", "ntfs", "", label="WindowsGames", uuid="ntfs-uuid")
+                    ],
+                }
+            ]
+        }
+
+        partitions = DiskManager().parse_lsblk_output(json.dumps(payload))
+
+        self.assertEqual(1, len(partitions))
+        self.assertEqual("/dev/sdd1", partitions[0].device)
+        self.assertEqual("ntfs", partitions[0].filesystem)
+
     def _partition(
         self,
         name: str,
         filesystem: str,
-        mountpoint: str,
+        mountpoint: str | list[str],
         *,
         label: str = "",
         uuid: str = "",
@@ -82,9 +233,15 @@ class DiskManagerTests(unittest.TestCase):
             "fstype": filesystem,
             "label": label,
             "uuid": uuid,
-            "mountpoints": [mountpoint] if mountpoint else [],
+            "mountpoints": self._mountpoints(mountpoint),
             "type": "part",
         }
+
+    def _mountpoints(self, mountpoint: str | list[str]) -> list[str]:
+        if isinstance(mountpoint, list):
+            return mountpoint
+
+        return [mountpoint] if mountpoint else []
 
 
 if __name__ == "__main__":
