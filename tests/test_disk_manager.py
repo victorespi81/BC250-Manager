@@ -6,7 +6,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from bc250_manager.services.disk_manager import DiskDetectionError, DiskManager
+from bc250_manager.services.disk_manager import DiskDetectionError, DiskManager, DiskPartition
 
 
 class DiskManagerTests(unittest.TestCase):
@@ -217,6 +217,42 @@ class DiskManagerTests(unittest.TestCase):
         self.assertEqual("/dev/sdd1", partitions[0].device)
         self.assertEqual("ntfs", partitions[0].filesystem)
 
+    def test_ext4_fstab_line_uses_pass_2(self) -> None:
+        line = self._fstab_line_for("ext4", "ext4-uuid")
+
+        self.assertEqual(
+            "UUID=ext4-uuid /games/Games ext4 "
+            "defaults,nofail,x-systemd.device-timeout=5 0 2",
+            line,
+        )
+
+    def test_ntfs_fstab_line_uses_pass_0(self) -> None:
+        line = self._fstab_line_for("ntfs", "ntfs-uuid")
+
+        self.assertEqual(
+            "UUID=ntfs-uuid /games/Games ntfs "
+            "defaults,nofail,x-systemd.device-timeout=5 0 0",
+            line,
+        )
+
+    def test_ntfs3_fstab_line_uses_pass_0(self) -> None:
+        line = self._fstab_line_for("ntfs3", "ntfs3-uuid")
+
+        self.assertEqual(
+            "UUID=ntfs3-uuid /games/Games ntfs3 "
+            "defaults,nofail,x-systemd.device-timeout=5 0 0",
+            line,
+        )
+
+    def test_exfat_fstab_line_uses_pass_0(self) -> None:
+        line = self._fstab_line_for("exfat", "exfat-uuid")
+
+        self.assertEqual(
+            "UUID=exfat-uuid /games/Games exfat "
+            "defaults,nofail,x-systemd.device-timeout=5 0 0",
+            line,
+        )
+
     def _partition(
         self,
         name: str,
@@ -242,6 +278,18 @@ class DiskManagerTests(unittest.TestCase):
             return mountpoint
 
         return [mountpoint] if mountpoint else []
+
+    def _fstab_line_for(self, filesystem: str, uuid: str) -> str:
+        partition = DiskPartition(
+            device="/dev/sdb1",
+            size="1G",
+            filesystem=filesystem,
+            label="Games",
+            uuid=uuid,
+            mountpoint="",
+            has_steamapps=False,
+        )
+        return DiskManager().create_mount_plan(partition).fstab_line
 
 
 if __name__ == "__main__":
