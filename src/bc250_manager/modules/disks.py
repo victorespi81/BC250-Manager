@@ -3,13 +3,14 @@ from PySide6.QtWidgets import (
     QAbstractItemView,
     QHeaderView,
     QLabel,
+    QMessageBox,
     QPushButton,
     QTableWidget,
     QTableWidgetItem,
 )
 
 from bc250_manager.modules.base import ModulePage
-from bc250_manager.services.disk_manager import DiskDetectionError, DiskManager, DiskPartition
+from bc250_manager.services.disk_manager import DiskDetectionError, DiskManager, DiskPartition, MountPlan
 
 
 class DisksPage(ModulePage):
@@ -30,9 +31,11 @@ class DisksPage(ModulePage):
         )
 
         self._disk_manager = disk_manager or DiskManager()
+        self._partitions: list[DiskPartition] = []
         self._table = QTableWidget(0, len(self.COLUMNS))
         self._status = QLabel()
         self._refresh_button = QPushButton("Refresh")
+        self._mount_button = QPushButton("Mount selected")
 
         self._configure_ui()
         self.refresh()
@@ -40,6 +43,10 @@ class DisksPage(ModulePage):
     def _configure_ui(self) -> None:
         self._refresh_button.setObjectName("RefreshButton")
         self._refresh_button.clicked.connect(self.refresh)
+
+        self._mount_button.setObjectName("MountButton")
+        self._mount_button.setEnabled(False)
+        self._mount_button.clicked.connect(self._mount_selected)
 
         self._status.setObjectName("StatusText")
         self._status.setWordWrap(True)
@@ -50,11 +57,13 @@ class DisksPage(ModulePage):
         self._table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self._table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self._table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self._table.itemSelectionChanged.connect(self._update_mount_button)
         self._table.verticalHeader().setVisible(False)
         self._table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
         self._table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)
 
         self.content_layout.addWidget(self._refresh_button, 0, Qt.AlignmentFlag.AlignRight)
+        self.content_layout.addWidget(self._mount_button, 0, Qt.AlignmentFlag.AlignRight)
         self.content_layout.addWidget(self._status)
         self.content_layout.addWidget(self._table, stretch=1)
 
@@ -80,7 +89,8 @@ class DisksPage(ModulePage):
                 font-size: 13px;
             }
 
-            #RefreshButton {
+            #RefreshButton,
+            #MountButton {
                 background: #2f80ed;
                 border: none;
                 border-radius: 6px;
@@ -90,8 +100,13 @@ class DisksPage(ModulePage):
                 padding: 8px 14px;
             }
 
-            #RefreshButton:hover {
+            #RefreshButton:hover,
+            #MountButton:hover {
                 background: #256dca;
+            }
+
+            #MountButton:disabled {
+                background: #aab7c4;
             }
 
             #DisksTable {
@@ -128,6 +143,7 @@ class DisksPage(ModulePage):
         try:
             partitions = self._disk_manager.list_partitions()
         except DiskDetectionError as exc:
+            self._partitions = []
             self._table.setRowCount(0)
             self._status.setText(f"Disk detection failed: {exc}")
         else:
@@ -139,6 +155,7 @@ class DisksPage(ModulePage):
 
     def _populate_table(self, partitions: list[DiskPartition]) -> None:
         self._table.setRowCount(len(partitions))
+        self._partitions = partitions
 
         for row, partition in enumerate(partitions):
             values = (
@@ -155,3 +172,69 @@ class DisksPage(ModulePage):
                 item = QTableWidgetItem(value)
                 item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
                 self._table.setItem(row, column, item)
+
+        self._update_mount_button()
+
+    def _update_mount_button(self) -> None:
+        self._mount_button.setEnabled(self._selected_partition() is not None)
+
+    def _selected_partition(self) -> DiskPartition | None:
+        selected_rows = self._table.selectionModel().selectedRows()
+        if not selected_rows:
+            return None
+
+        row = selected_rows[0].row()
+        if row < 0 or row >= len(self._partitions):
+            return None
+
+        return self._partitions[row]
+
+    def _mount_selected(self) -> None:
+        partition = self._selected_partition()
+        if partition is None:
+            return
+
+        try:
+            plan = self._disk_manager.create_mount_plan(partition)
+        except DiskDetectionError as exc:
+            QMessageBox.critical(self, "Mount failed", str(exc))
+            return
+
+        if plan.already_mounted:
+            QMessageBox.information(
+                self,
+                "Already mounted",
+                f"{partition.device} is already mounted at {partition.mountpoint}.",
+            )
+            return
+
+        if not self._confirm_mount(plan):
+            return
+
+        result = self._disk_manager.mount_partition(partition)
+        if result.success:
+            QMessageBox.information(self, "Mount complete", result.message)
+            self.refresh()
+            return
+
+        QMessageBox.critical(self, "Mount failed", result.message)
+
+    def _confirm_mount(self, plan: MountPlan) -> bool:
+        partition = plan.partition
+        message = (
+            f"Device: {partition.device}\n"
+            f"Label: {partition.label or '-'}\n"
+            f"Filesystem: {partition.filesystem}\n"
+            f"UUID: {partition.uuid}\n"
+            f"Target mountpoint: {plan.target_mountpoint}\n\n"
+            f"fstab line to add:\n{plan.fstab_line}"
+        )
+
+        response = QMessageBox.question(
+            self,
+            "Confirm disk mount",
+            message,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        return response == QMessageBox.StandardButton.Yes
