@@ -268,6 +268,22 @@ class DiskManagerTests(unittest.TestCase):
             plan.fstab_line,
         )
 
+    def test_ntfs3_fstab_line_uses_pass_0(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            fstab_path = Path(temp_dir) / "fstab"
+            fstab_path.write_text("", encoding="utf-8")
+            manager = DiskManager(fstab_path=fstab_path)
+
+            plan = manager.create_mount_plan(
+                self._disk_partition(filesystem="ntfs3", uuid="ntfs3-plan-uuid")
+            )
+
+        self.assertEqual(
+            "UUID=ntfs3-plan-uuid /games/Games ntfs3 "
+            "defaults,nofail,x-systemd.device-timeout=5 0 0",
+            plan.fstab_line,
+        )
+
     def test_exfat_fstab_line_uses_pass_0(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             fstab_path = Path(temp_dir) / "fstab"

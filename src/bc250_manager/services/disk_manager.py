@@ -22,7 +22,6 @@ GAME_MOUNTPOINT_PREFIXES = tuple(f"{mountpoint}/" for mountpoint in sorted(GAME_
 FSTAB_PATH = Path("/etc/fstab")
 LOG_PATH = Path.home() / ".local" / "state" / "bc250-manager" / "bc250-manager.log"
 MOUNT_OPTIONS = "defaults,nofail,x-systemd.device-timeout=5"
-WINDOWS_FILESYSTEMS = frozenset({"exfat", "ntfs", "ntfs3"})
 
 
 @dataclass(frozen=True)
@@ -314,10 +313,7 @@ class DiskManager:
         )
 
     def _fstab_pass_value(self, filesystem: str) -> str:
-        if filesystem.lower() in WINDOWS_FILESYSTEMS:
-            return "0"
-
-        return "2"
+        return "0" if filesystem.lower() in {"ntfs", "ntfs3", "exfat"} else "2"
 
     def _fstab_has_uuid(self, uuid: str) -> bool:
         try:
