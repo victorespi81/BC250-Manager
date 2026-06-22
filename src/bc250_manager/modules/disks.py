@@ -2,19 +2,17 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QHeaderView,
-    QHBoxLayout,
     QLabel,
     QPushButton,
     QTableWidget,
     QTableWidgetItem,
-    QVBoxLayout,
-    QWidget,
 )
 
+from bc250_manager.modules.base import ModulePage
 from bc250_manager.services.disk_manager import DiskDetectionError, DiskManager, DiskPartition
 
 
-class DisksPage(QWidget):
+class DisksPage(ModulePage):
     COLUMNS = (
         "Device",
         "Size",
@@ -26,7 +24,10 @@ class DisksPage(QWidget):
     )
 
     def __init__(self, disk_manager: DiskManager | None = None) -> None:
-        super().__init__()
+        super().__init__(
+            title="Disks",
+            description="Detected user-manageable partitions. This view does not mount disks or modify fstab.",
+        )
 
         self._disk_manager = disk_manager or DiskManager()
         self._table = QTableWidget(0, len(self.COLUMNS))
@@ -37,30 +38,8 @@ class DisksPage(QWidget):
         self.refresh()
 
     def _configure_ui(self) -> None:
-        self.setObjectName("DisksPage")
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(34, 30, 34, 30)
-        layout.setSpacing(18)
-
-        header_layout = QHBoxLayout()
-        header_layout.setSpacing(12)
-
-        heading = QLabel("Disks")
-        heading.setObjectName("ModuleHeading")
-
         self._refresh_button.setObjectName("RefreshButton")
         self._refresh_button.clicked.connect(self.refresh)
-
-        header_layout.addWidget(heading)
-        header_layout.addStretch()
-        header_layout.addWidget(self._refresh_button)
-
-        description = QLabel(
-            "Detected user-manageable partitions. This view does not mount disks or modify fstab."
-        )
-        description.setObjectName("ModuleDescription")
-        description.setWordWrap(True)
 
         self._status.setObjectName("StatusText")
         self._status.setWordWrap(True)
@@ -75,14 +54,13 @@ class DisksPage(QWidget):
         self._table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
         self._table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)
 
-        layout.addLayout(header_layout)
-        layout.addWidget(description)
-        layout.addWidget(self._status)
-        layout.addWidget(self._table, stretch=1)
+        self.content_layout.addWidget(self._refresh_button, 0, Qt.AlignmentFlag.AlignRight)
+        self.content_layout.addWidget(self._status)
+        self.content_layout.addWidget(self._table, stretch=1)
 
         self.setStyleSheet(
             """
-            #DisksPage {
+            #ModulePage {
                 background: #f4f6f8;
             }
 

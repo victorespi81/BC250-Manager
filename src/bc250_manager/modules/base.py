@@ -8,10 +8,10 @@ class ModulePage(QWidget):
 
         self.setObjectName("ModulePage")
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(34, 30, 34, 30)
-        layout.setSpacing(10)
-        layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self._layout = QVBoxLayout(self)
+        self._layout.setContentsMargins(34, 30, 34, 30)
+        self._layout.setSpacing(10)
+        self._layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         heading = QLabel(title)
         heading.setObjectName("ModuleHeading")
@@ -20,9 +20,13 @@ class ModulePage(QWidget):
         body.setObjectName("ModuleDescription")
         body.setWordWrap(True)
 
-        layout.addWidget(heading)
-        layout.addWidget(body)
-        layout.addStretch()
+        self._layout.addWidget(heading)
+        self._layout.addWidget(body)
+
+        self._content_layout = QVBoxLayout()
+        self._content_layout.setContentsMargins(0, 8, 0, 0)
+        self._content_layout.setSpacing(12)
+        self._layout.addLayout(self._content_layout, stretch=1)
 
         self.setStyleSheet(
             """
@@ -43,3 +47,7 @@ class ModulePage(QWidget):
             }
             """
         )
+
+    @property
+    def content_layout(self) -> QVBoxLayout:
+        return self._content_layout
